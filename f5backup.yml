@@ -1,0 +1,92 @@
+---
+- hosts: all
+  connection: local
+  gather_facts: false
+
+  tasks:
+    - name: set repo path
+      set_fact:
+        git_repo_path: "{{ git_url | regex_search('/(.+).git') | regex_replace('.git', '') }}"
+
+    - name: git clone
+      git:
+        repo: "{{ git_url }}"
+        dest: "{{ playbook_dir }}/{{ git_repo_path }}"
+        accept_hostkey: yes
+        key_file: "{{ git_key }}"
+
+    - name: create backup
+      bigip_command:
+        server: "{{ inventory_hostname }}"
+        commands: "save sys ucs cs_backup.ucs"
+        validate_certs: no
+
+    - name: Download a new UCS
+      bigip_ucs_fetch:
+        src: "cs_backup.ucs"
+        dest: "{{ playbook_dir }}/{{ git_repo_path }}/cs_{{ inventory_hostname }}.ucs"
+        create_on_missing: yes
+        force: yes
+        server: "{{ inventory_hostname }}"
+        fail_on_missing: yes
+        validate_certs: no
+      delegate_to: localhost
+
+    - name: Remove uploaded UCS file
+      bigip_ucs:
+        ucs: cs_backup.ucs
+        state: absent
+        validate_certs: no
+        server: "{{ inventory_hostname }}"
+      delegate_to: localhost
+
+    - name: git add all new files
+      shell: git add -A
+      args:
+        chdir: "{{ playbook_dir }}{{ git_repo_path }}"
+
+    - name: git status
+      shell: git status
+      args:
+        chdir: "{{ playbook_dir }}{{ git_repo_path }}"
+      register: git_add_status
+
+    - name: git commit
+      shell: git config user.name "'{{ username }}'"
+      args:
+        chdir: "{{ playbook_dir }}{{ git_repo_path }}"
+      ignore_errors: true
+
+    - name: git commit
+      shell: git config user.email "{{ email }}"
+      args:
+        chdir: "{{ playbook_dir }}{{ git_repo_path }}"
+      ignore_errors: true
+
+    - name: git wrapper
+      copy:
+        dest: "{{ playbook_dir }}/.ssh/ssh"
+        content: "ssh -i {{ git_key }} -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no $*"
+        mode: 0700
+
+    - name: git commit
+      shell: git commit -m "{{ git_msg }}"
+      args:
+        chdir: "{{ playbook_dir }}{{ git_repo_path }}"
+      ignore_errors: true
+      environment:
+        GIT_SSH: "{{ playbook_dir }}/.ssh/ssh"
+
+    - name: git push
+      shell: git push --force
+      args:
+        chdir: "{{ playbook_dir }}{{ git_repo_path }}"
+      environment:
+        GIT_SSH: "{{ playbook_dir }}/.ssh/ssh"
+
+    - name: git status
+      shell: git status
+      args:
+        chdir: "{{ playbook_dir }}/{{ git_repo_path }}"
+      register: git_add_status
+      
