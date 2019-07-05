@@ -14,4 +14,4 @@ username: global config for git username example: Eric McLeroy
 
 git_key: ssh key file passed from Ansible vault or from Ansible Tower using the below Credential Type
 
-(credential.png)
+![credential](credential.png)
