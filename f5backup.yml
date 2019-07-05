@@ -63,6 +63,12 @@
         chdir: "{{ playbook_dir }}{{ git_repo_path }}"
       ignore_errors: true
 
+    - name: git wrapper destination
+      file:
+        path: "{{ playbook_dir }}/.ssh"
+        state: directory
+        mode: 0700
+
     - name: git wrapper
       copy:
         dest: "{{ playbook_dir }}/.ssh/ssh"
